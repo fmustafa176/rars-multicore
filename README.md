@@ -14,6 +14,14 @@ an effective development environment for people getting started with RISC-V.
     intermediate steps
   - Multifile assembly using either files open or a directory
 
+### Multi-Core Additions (This Fork)
+
+This specific iteration extends the base RARS functionality to support **Multi-Core Execution** and visualization:
+- **Multi-Core Execution Engine**: Simulates multiple RISC-V cores operating concurrently, complete with cycle-level tracking.
+- **Atomic Operations**: Integrates support for Load-Reserved (LR) and Store-Conditional (SC) synchronization primitives.
+- **Race Condition Detection**: Real-time identification of unsafe concurrent accesses (Read-Write, Write-Write) to shared memory.
+- **Interactive Visualizations**: Includes styled visual panels to provide real-time, color-coded logging of shared memory accesses and detected race conditions across cores.
+
 ## Documentation
 
 Documentation for supported [instructions](https://github.com/TheThirdOne/rars/wiki/Supported-Instructions), [system calls](https://github.com/TheThirdOne/rars/wiki/Environment-Calls), [assembler directives](https://github.com/TheThirdOne/rars/wiki/Assembler-Directives) and more can be found on the [wiki](https://github.com/TheThirdOne/rars/wiki). Documentation included in the download can be accessed via the help menu. 

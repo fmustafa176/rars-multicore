@@ -53,6 +53,7 @@ public class MainPane extends JTabbedPane {
     EditTabbedPane editTabbedPane;
 
     private VenusUI mainUI;
+    VisualizationPane visualizationTab;
 
     /**
      * Constructor for the MainPane class.
@@ -79,9 +80,13 @@ public class MainPane extends JTabbedPane {
         this.setForeground(Color.black);
 
         this.addTab(executeTabTitle, executeTabIcon, executeTab);
+        
+        visualizationTab = new VisualizationPane();
+        this.addTab("Visualization", null, visualizationTab);
 
         this.setToolTipTextAt(0, "Text editor for composing RISCV programs.");
         this.setToolTipTextAt(1, "View and control assembly language program execution.  Enabled upon successful assemble.");
+        this.setToolTipTextAt(2, "Advanced visualization of datapath, pipeline, and multi-core execution.");
       
       	/* Listener has one specific purpose: when Execute tab is selected for the 
            * first time, set the bounds of its internal frames by invoking the
@@ -140,6 +145,15 @@ public class MainPane extends JTabbedPane {
      */
     public ExecutePane getExecuteTab() {
         return executeTab;
+    }
+
+    /**
+     * returns component containing visualization display
+     *
+     * @return the visualization pane
+     */
+    public VisualizationPane getVisualizationPane() {
+        return visualizationTab;
     }
 
 }

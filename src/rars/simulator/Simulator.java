@@ -8,6 +8,10 @@ import rars.util.Binary;
 import rars.util.SystemIO;
 import rars.venus.run.RunSpeedPanel;
 
+import rars.simulator.ExecutionMode;
+import rars.simulator.MultiCoreSimulator;
+import rars.venus.VisualizationPane;
+
 import javax.swing.*;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,6 +56,11 @@ public class Simulator extends Observable {
     private SimThread simulatorThread;
     private static Simulator simulator = null;  // Singleton object
     private static Runnable interactiveGUIUpdater = null;
+    
+    private MultiCoreSimulator multiCoreSimulator = null;
+    private ExecutionMode executionMode = ExecutionMode.SINGLE_CYCLE;
+    private boolean visualizationActive = true; // default to true to allow testing it immediately
+    private int numCores = 1;
 
     /**
      * various reasons for simulate to end...
@@ -84,9 +93,28 @@ public class Simulator extends Observable {
 
     private Simulator() {
         simulatorThread = null;
+        multiCoreSimulator = new MultiCoreSimulator();
         if (Globals.getGui() != null) {
             interactiveGUIUpdater = new UpdateGUI();
         }
+    }
+
+    public void setupVisualization(int cores, ExecutionMode mode) {
+        this.numCores = cores;
+        this.executionMode = mode;
+        this.visualizationActive = true;
+    }
+
+    public void resetVisualization() {
+        if (multiCoreSimulator != null) multiCoreSimulator.reset();
+    }
+
+    public MultiCoreSimulator getMultiCoreSimulator() {
+        return multiCoreSimulator;
+    }
+    
+    public SharedMemory getSharedMemory() {
+        return multiCoreSimulator != null ? multiCoreSimulator.getSharedMemory() : null;
     }
 
     /**
@@ -380,6 +408,12 @@ public class Simulator extends Observable {
             // *********************************************************************
 
             RegisterFile.initializeProgramCounter(pc);
+
+            if (Simulator.this.visualizationActive) {
+                runVisualized(pc);
+                return;
+            }
+
             ProgramStatement statement = null;
             int steps = 0;
             boolean ebreak = false, waiting = false;
@@ -565,6 +599,66 @@ public class Simulator extends Observable {
                             Thread.sleep((int) (1000 / RunSpeedPanel.getInstance().getRunSpeed())); // make sure it's never zero!
                         } catch (InterruptedException e) {
                         }
+                    }
+                }
+            }
+            stopExecution(false, constructReturnReason);
+        }
+
+        private void runVisualized(int pc) {
+            multiCoreSimulator.initialize(numCores, executionMode, pc);
+            int steps = 0;
+            long lastGuiUpdateTime = System.currentTimeMillis();
+
+            while (!stop) {
+                SystemIO.flush(false);
+                Globals.memoryAndRegistersLock.lock();
+                MultiCoreSimulator.MultiCoreCycleSnapshot snapshot = null;
+                try {
+                    if (maxSteps > 0 && steps >= maxSteps) {
+                        stopExecution(false, Reason.MAX_STEPS);
+                        return;
+                    }
+                    
+                    snapshot = multiCoreSimulator.advanceOneCycle();
+                    if (snapshot == null || multiCoreSimulator.isAllHalted()) {
+                        stopExecution(true, Reason.NORMAL_TERMINATION);
+                        // Make sure final snapshot is sent
+                        if (snapshot != null && interactiveGUIUpdater != null && Globals.getGui() != null) {
+                            final MultiCoreSimulator.MultiCoreCycleSnapshot finalSnapshot = snapshot;
+                            SwingUtilities.invokeLater(() -> Globals.getGui().getMainPane().getVisualizationPane().updateVisualization(finalSnapshot));
+                        }
+                        return;
+                    }
+                    steps++;
+                } finally {
+                    Globals.memoryAndRegistersLock.unlock();
+                }
+
+                if (interactiveGUIUpdater != null && Globals.getGui() != null) {
+                    final MultiCoreSimulator.MultiCoreCycleSnapshot currentSnapshot = snapshot;
+                    if (maxSteps == 1 || RunSpeedPanel.getInstance().getRunSpeed() < RunSpeedPanel.UNLIMITED_SPEED) {
+                        SwingUtilities.invokeLater(() -> {
+                            interactiveGUIUpdater.run();
+                            Globals.getGui().getMainPane().getVisualizationPane().updateVisualization(currentSnapshot);
+                        });
+                    } else {
+                        long now = System.currentTimeMillis();
+                        if (now - lastGuiUpdateTime > 50) { // Limit to ~20 FPS
+                            lastGuiUpdateTime = now;
+                            SwingUtilities.invokeLater(() -> {
+                                interactiveGUIUpdater.run();
+                                Globals.getGui().getMainPane().getVisualizationPane().updateVisualization(currentSnapshot);
+                            });
+                        }
+                    }
+                }
+
+                if (Globals.getGui() != null || Globals.runSpeedPanelExists) {
+                    if (maxSteps != 1 && RunSpeedPanel.getInstance().getRunSpeed() < RunSpeedPanel.UNLIMITED_SPEED) {
+                        try {
+                            Thread.sleep((int) (1000 / RunSpeedPanel.getInstance().getRunSpeed()));
+                        } catch (InterruptedException e) { }
                     }
                 }
             }
